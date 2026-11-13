@@ -68,6 +68,19 @@ class FetchTests(unittest.TestCase):
                     self.assertEqual(result.returncode, 0)
                     self.assertTrue(result.stdout)
 
+    def test_rgb_logo_colours(self):
+        with tempfile.TemporaryDirectory(prefix="fetch-test-") as directory:
+            home = Path(directory)
+            config_dir = home / ".config" / "fetch"
+            config_dir.mkdir(parents=True)
+            (config_dir / "config").write_text("height=20\ndepth=1\nspeed=0\n")
+            row = "\x1b[38;2;158;101;64mMMMM\x1b[38;2;222;181;126mMMMM\x1b[0m\n"
+            (config_dir / "logo.txt").write_text(row * 4, encoding="utf-8")
+            result = self.run_fetch(["--no-info", "--frames", "1"], home)
+            self.assertEqual(result.returncode, 0)
+            self.assertIn(b"\x1b[38;2;158;101;64m", result.stdout)
+            self.assertIn(b"\x1b[38;2;222;181;126m", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

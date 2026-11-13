@@ -9,6 +9,7 @@
 #include <limits.h>
 #include <ctype.h>
 #include <errno.h>
+#include "fetch_logo_color.h"
 
 #ifdef _WIN32
 #include "fetch_windows.h"
@@ -395,7 +396,7 @@ static char logo_data[MAX_LOGO_ROWS][512];
 // Parsed per-cell codepoints
 static char logo_cells[MAX_LOGO_ROWS][MAX_LOGO_COLS][5];
 static int logo_cell_color[MAX_LOGO_ROWS]
-                          [MAX_LOGO_COLS]; // ANSI fg color per cell
+                          [MAX_LOGO_COLS]; // ANSI or packed RGB foreground
 static int logo_cell_counts[MAX_LOGO_ROWS];
 static int logo_rows = 0;
 static int logo_cols = 0;
@@ -409,33 +410,12 @@ static void process_logo_row(int row) {
   while (*p && col < MAX_LOGO_COLS) {
     // Parse ANSI escapes for color info
     if (p[0] == '\033' && p[1] == '[') {
-      int i = 2;
-      // Extract foreground color from SGR params
-      int num = 0, has_num = 0;
-      while (p[i] && ((p[i] >= '0' && p[i] <= '9') || p[i] == ';')) {
-        if (p[i] >= '0' && p[i] <= '9') {
-          num = num * 10 + (p[i] - '0');
-          has_num = 1;
-        } else if (p[i] == ';') {
-          if (has_num && ((num >= 30 && num <= 37) || num == 39 ||
-                          (num >= 90 && num <= 97)))
-            cur_color = num;
-          if (has_num && num == 1)
-            ; // bold flag — ignored; colors are always output bold
-          if (has_num && (num == 0 || num == 22))
-            cur_color = 0;
-          num = 0;
-          has_num = 0;
-        }
-        i++;
+      int parsed = logo_sgr_color(p + 2, &cur_color);
+      int i = parsed ? parsed + 2 : 2;
+      if (!parsed) {
+        while (p[i] && ((p[i] >= '0' && p[i] <= '9') || p[i] == ';')) i++;
+        if (p[i]) i++;
       }
-      if (has_num &&
-          ((num >= 30 && num <= 37) || num == 39 || (num >= 90 && num <= 97)))
-        cur_color = num;
-      if (has_num && num == 0)
-        cur_color = 0;
-      if (p[i])
-        i++;
       if (cur_color > 0)
         logo_has_ansi = 1;
       p += i;
@@ -4808,8 +4788,6 @@ int main(int argc, char **argv) {
 
     // Pre-formatted common ANSI color escape prefix: \033[1;XXm
     // c is in 30-37 or 90-97, pre-encode the 6-byte prefix (cached across frames)
-    static char ansi_tbl[128][8];
-    static int ansi_len[128];
     int inner_len = strlen(color_inner);
     int outer_len = strlen(color_outer);
 
@@ -4846,14 +4824,13 @@ int main(int argc, char **argv) {
             *p++ = ' ';
           } else {
             if (c != prev_color) {
-              if (logo_has_ansi && c > 0 && c < 128) {
-                // Build ANSI escape lazily on first use
-                if (!ansi_len[c]) {
-                  ansi_len[c] = snprintf(ansi_tbl[c], sizeof(ansi_tbl[c]),
-                                         "\033[1;%dm", c);
-                }
-                memcpy(p, ansi_tbl[c], ansi_len[c]);
-                p += ansi_len[c];
+              if (logo_has_ansi && c > 0) {
+                char sequence[32];
+                int length = logo_color_escape(c, sequence, sizeof(sequence));
+                if (length < 0 || length >= (int)sizeof(sequence) ||
+                    p + length + 8 >= end) break;
+                memcpy(p, sequence, length);
+                p += length;
               } else {
                 const char *cs = (c == 1) ? color_inner : color_outer;
                 int clen = (c == 1) ? inner_len : outer_len;

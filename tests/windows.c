@@ -85,6 +85,22 @@ int main(int argc, char **argv) {
     }
   }
 
+  logo_rows = 1;
+  strcpy(logo_data[0], "\033[31mA\033[38;2;158;101;64mB\033[38;5;130mC\033[0mD");
+  process_logo();
+  CHECK(logo_has_ansi && logo_cell_counts[0] == 4);
+  CHECK(strcmp(logo_cells[0][1], "B") == 0);
+  CHECK(logo_cell_color[0][0] == 31);
+  CHECK(logo_cell_color[0][1] == (LOGO_COLOR_RGB | 0x9e6540));
+  CHECK(logo_cell_color[0][2] == (LOGO_COLOR_INDEXED | 130));
+  CHECK(logo_cell_color[0][3] == 0);
+  build_points();
+  int brown_points = 0;
+  for (int i = 0; i < POINT_COUNT; i++)
+    if (PCOLOR[i] == (LOGO_COLOR_RGB | 0x9e6540)) brown_points++;
+  CHECK(brown_points > 0);
+  logo_has_ansi = 0;
+
   for (int shape = 0; shape < 3; shape++) {
     logo_rows = shape == 2 ? 3 : 1;
     for (int r = 0; r < logo_rows; r++)

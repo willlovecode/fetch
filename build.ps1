@@ -33,6 +33,11 @@ try {
 }
 Write-Output "Built $Output"
 if ($Test) {
+    $colorTests = Join-Path $PSScriptRoot 'tests\logo-colors.exe'
+    & $Compiler @flags (Join-Path $PSScriptRoot 'tests\logo-colors.c') '-o' $colorTests
+    if ($LASTEXITCODE -ne 0) { throw "colour test build failed with exit code $LASTEXITCODE" }
+    & $colorTests
+    if ($LASTEXITCODE -ne 0) { throw "colour tests failed with exit code $LASTEXITCODE" }
     $testBinary = Join-Path $PSScriptRoot 'tests\windows-tests.exe'
     & $Compiler @flags (Join-Path $PSScriptRoot 'tests\windows.c') '-o' $testBinary '-ladvapi32'
     if ($LASTEXITCODE -ne 0) { throw "test build failed with exit code $LASTEXITCODE" }
